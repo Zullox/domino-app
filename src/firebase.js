@@ -26,7 +26,7 @@ import {
 // ⚠️ REEMPLAZAR con tus credenciales de Firebase
 const firebaseConfig = {
   apiKey: "AIzaSyBISfbvWeqKxnqIXOJdYPBoGRsSMqdqJvU",
-  authDomain: "domino-online-4cc5f.firebaseapp.com",
+  authDomain: "domino-online-4cc5f.web.app",
   projectId: "domino-online-4cc5f",
   storageBucket: "domino-online-4cc5f.firebasestorage.app",
   messagingSenderId: "329019462538",
