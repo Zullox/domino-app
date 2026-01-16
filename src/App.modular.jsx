@@ -17,6 +17,7 @@ const ProfileScreen = lazy(() => import('./screens/ProfileScreen'));
 const RankingsScreen = lazy(() => import('./screens/RankingsScreen'));
 const AchievementsScreen = lazy(() => import('./screens/AchievementsScreen'));
 const FriendsScreen = lazy(() => import('./screens/FriendsScreen'));
+const LoginScreen = lazy(() => import('./LoginScreen'));
 
 // Hooks
 import { useOfflineGame, useOnlineGame, useSettings } from './hooks';
@@ -237,6 +238,15 @@ const AppContent = () => {
   
   if (authLoading) {
     return <LoadingScreen />;
+  }
+  
+  // Si no está autenticado, mostrar LoginScreen
+  if (!isAuthenticated) {
+    return (
+      <Suspense fallback={<ScreenLoader />}>
+        <LoginScreen />
+      </Suspense>
+    );
   }
   
   // ══════════════════════════════════════════════════════════════════════════

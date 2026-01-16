@@ -5,8 +5,8 @@
 export const SERVIDOR_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
 
 export const CONFIG = {
-  maxTile: 6,
-  tilesPerPlayer: 7,
+  maxTile: 9,
+  tilesPerPlayer: 10,
   targetScore: 100,
   turnTime: 30,
   maxRematches: 3
