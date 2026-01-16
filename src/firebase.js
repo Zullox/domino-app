@@ -66,9 +66,9 @@ const isMobile = () => {
 // Login con Google
 export const signInWithGoogle = async () => {
   try {
-    // Usar siempre redirect (más compatible)
-    await signInWithRedirect(auth, googleProvider);
-    return null; // El resultado viene después del redirect
+    // Usar popup (más confiable)
+    const result = await signInWithPopup(auth, googleProvider);
+    return result.user;
   } catch (error) {
     console.error('[Auth] Error Google:', error);
     throw error;
