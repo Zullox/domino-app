@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <defs>
+    <linearGradient id="galaxyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0a0a2e"/>
+      <stop offset="30%" style="stop-color:#1a0a3e"/>
+      <stop offset="60%" style="stop-color:#0a1a3e"/>
+      <stop offset="100%" style="stop-color:#0a0a2e"/>
+    </linearGradient>
+    <!-- Nebula effect -->
+    <radialGradient id="nebula1" cx="30%" cy="30%" r="40%">
+      <stop offset="0%" style="stop-color:rgba(138,43,226,0.3)"/>
+      <stop offset="100%" style="stop-color:rgba(138,43,226,0)"/>
+    </radialGradient>
+    <radialGradient id="nebula2" cx="70%" cy="70%" r="35%">
+      <stop offset="0%" style="stop-color:rgba(30,144,255,0.25)"/>
+      <stop offset="100%" style="stop-color:rgba(30,144,255,0)"/>
+    </radialGradient>
+    <filter id="starGlow">
+      <feGaussianBlur stdDeviation="1" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <!-- Base -->
+  <rect width="400" height="400" fill="url(#galaxyGrad)"/>
+  <!-- Nebulas -->
+  <rect width="400" height="400" fill="url(#nebula1)"/>
+  <rect width="400" height="400" fill="url(#nebula2)"/>
+  <!-- Stars -->
+  <g filter="url(#starGlow)">
+    <circle cx="50" cy="30" r="1.5" fill="white"/>
+    <circle cx="120" cy="80" r="1" fill="white"/>
+    <circle cx="200" cy="50" r="2" fill="white"/>
+    <circle cx="280" cy="90" r="1" fill="white"/>
+    <circle cx="350" cy="40" r="1.5" fill="white"/>
+    <circle cx="30" cy="150" r="1" fill="white"/>
+    <circle cx="100" cy="200" r="1.5" fill="white"/>
+    <circle cx="180" cy="180" r="1" fill="white"/>
+    <circle cx="250" cy="220" r="2" fill="white"/>
+    <circle cx="320" cy="170" r="1" fill="white"/>
+    <circle cx="380" cy="200" r="1.5" fill="white"/>
+    <circle cx="60" cy="280" r="1" fill="white"/>
+    <circle cx="140" cy="320" r="1.5" fill="white"/>
+    <circle cx="220" cy="290" r="1" fill="white"/>
+    <circle cx="300" cy="340" r="2" fill="white"/>
+    <circle cx="370" cy="300" r="1" fill="white"/>
+    <circle cx="40" cy="370" r="1.5" fill="white"/>
+    <circle cx="160" cy="380" r="1" fill="white"/>
+    <circle cx="260" cy="360" r="1.5" fill="white"/>
+    <circle cx="340" cy="390" r="1" fill="white"/>
+  </g>
+  <!-- Border -->
+  <rect x="2" y="2" width="396" height="396" rx="8" fill="none" stroke="#4a4a8a" stroke-width="4"/>
+</svg>

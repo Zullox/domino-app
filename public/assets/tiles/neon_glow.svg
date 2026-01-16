@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="200" viewBox="0 0 100 200">
+  <defs>
+    <filter id="neonGlow">
+      <feGaussianBlur stdDeviation="4" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <!-- Dark background -->
+  <rect width="100" height="200" rx="12" fill="#0a0a0a"/>
+  <!-- Neon border -->
+  <rect x="4" y="4" width="92" height="192" rx="10" fill="none" stroke="#00ff00" stroke-width="3" filter="url(#neonGlow)"/>
+  <!-- Inner glow lines -->
+  <line x1="10" y1="100" x2="90" y2="100" stroke="#00ff00" stroke-width="2" filter="url(#neonGlow)"/>
+  <!-- Corner accents -->
+  <circle cx="15" cy="15" r="3" fill="#ff00ff" filter="url(#neonGlow)"/>
+  <circle cx="85" cy="15" r="3" fill="#00ffff" filter="url(#neonGlow)"/>
+  <circle cx="15" cy="185" r="3" fill="#00ffff" filter="url(#neonGlow)"/>
+  <circle cx="85" cy="185" r="3" fill="#ff00ff" filter="url(#neonGlow)"/>
+</svg>
