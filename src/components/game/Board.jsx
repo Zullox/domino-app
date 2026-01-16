@@ -204,7 +204,7 @@ const Board = memo(({
               >
                 <span style={{ fontSize: 20 }}>👉</span>
               </div>
-            ))}
+            )}
           </div>
         )}
       </div>
