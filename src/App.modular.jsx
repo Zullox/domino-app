@@ -133,7 +133,7 @@ const AppContent = () => {
   // Iniciar búsqueda online
   const handlePlayOnline = useCallback(() => {
     setGameMode('online');
-    onlineGame.searchMatch();
+    onlineGame.searchGame();
     setScreen('searching');
   }, [onlineGame]);
   
@@ -193,7 +193,7 @@ const AppContent = () => {
       offlineGame.startGame();
       setScreen('game');
     } else {
-      onlineGame.searchMatch();
+      onlineGame.searchGame();
       setScreen('searching');
     }
   }, [gameMode, offlineGame, onlineGame]);
