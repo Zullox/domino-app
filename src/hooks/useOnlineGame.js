@@ -477,6 +477,31 @@ export const useOnlineGame = () => {
   }, [players, myTeam, myPosition]);
   
   // ══════════════════════════════════════════════════════════════════════════
+  // CONSTRUIR gameState PARA COMPATIBILIDAD CON GameScreen
+  // ══════════════════════════════════════════════════════════════════════════
+  
+  const hasGameData = players.length > 0 && myHand.length > 0;
+  const gameState = hasGameData ? {
+    players: players.map((p, idx) => ({
+      ...p,
+      tiles: idx === myPosition ? myHand : [],
+      tileCount: idx === myPosition ? myHand.length : (p.handCount || 10)
+    })),
+    board: {
+      tiles: board,
+      leftEnd,
+      rightEnd
+    },
+    scores: [scores.team0 || 0, scores.team1 || 0],
+    currentPlayer,
+    roundNum: roundNumber,
+    targetScore,
+    starterTile: null,
+    roundResult,
+    gameResult
+  } : null;
+  
+  // ══════════════════════════════════════════════════════════════════════════
   // RETORNO
   // ══════════════════════════════════════════════════════════════════════════
   
@@ -506,6 +531,9 @@ export const useOnlineGame = () => {
     roundNumber,
     targetScore,
     timeLeft,
+    
+    // gameState para compatibilidad con GameScreen
+    gameState,
     
     // Resultados
     roundResult,

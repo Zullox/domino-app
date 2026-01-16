@@ -303,7 +303,11 @@ const AppContent = () => {
   }
   
   // Juego
-  if (screen === 'game' && gameState) {
+  if (screen === 'game') {
+    if (!gameState) {
+      // Mostrar loader mientras espera datos del juego
+      return <ScreenLoader />;
+    }
     return (
       <Suspense fallback={<ScreenLoader />}>
         <GameScreen
