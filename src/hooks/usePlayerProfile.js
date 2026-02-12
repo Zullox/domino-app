@@ -7,7 +7,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createDefaultPlayerProfile } from '../constants/playerProfile';
-import { DecaySystem } from '../services/rating';
+import { DecaySystem } from '../services/decay';
 import { Glicko2 } from '../services/rating';
 import { getRank } from '../constants/game';
 import { TIER_ORDER } from '../constants/cosmetics';
