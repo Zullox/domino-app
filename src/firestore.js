@@ -33,14 +33,13 @@ import {
 
 // Credenciales desde variables de entorno (mismas que firebase.js)
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyBISfbvWeqKxnqIXOJdYPBoGRsSMqdqJvU',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'domino-online-4cc5f.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'domino-online-4cc5f',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'domino-online-4cc5f.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '329019462538',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:329019462538:web:bf249ae218bee3b1dbee73'
 };
-
 // Inicializar (reutilizar si ya existe)
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 const db = getFirestore(app);
