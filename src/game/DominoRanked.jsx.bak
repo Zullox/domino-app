@@ -1,0 +1,799 @@
+// ============================================================================
+// DOMINO RANKED - Componente principal del juego
+// ============================================================================
+// Versión modular completa con todas las funcionalidades
+// ============================================================================
+
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import io from 'socket.io-client';
+
+// Context
+import { GameProvider, useGame } from '../context/GameContext';
+
+// Hooks
+import { 
+  usePlayerProfile, 
+  useTurnTimer,
+  useTranslation,
+  useRematch,
+  useAchievements
+} from '../hooks';
+
+// Components
+import { 
+  Board, 
+  PlayerHandArea, 
+  GameHUD,
+  OpponentHandTop,
+  OpponentHandSide,
+  PassIndicator
+} from '../components/game';
+import { SettingsModal, DailyRewardsModal } from '../components/modals';
+
+// Screens
+import {
+  RankingsScreen,
+  ShopScreen,
+  InventoryScreen,
+  FriendsScreen,
+  AchievementsScreen,
+  TournamentsScreen,
+  SettingsScreen,
+  ProfileScreen,
+  TutorialScreen,
+  PrivateRoomScreen,
+  CoinStoreScreen,
+  SeasonPassScreen
+} from '../screens';
+
+// Constants & Utils
+import { THEME } from '../constants/game';
+import { SERVIDOR_URL } from '../constants/serverConfig';
+import { SnakeBoard } from '../utils/snakeBoard';
+import { Engine } from '../utils/gameEngine';
+
+const C = THEME.colors;
+
+// ============================================================================
+// EMOTES
+// ============================================================================
+const EMOTES = ['👍', '👎', '👏', '😂', '😢', '😡', '🤔', '😎', '🔥', '💪', '🎯', '🎲'];
+
+// ============================================================================
+// INNER COMPONENT (usa context)
+// ============================================================================
+const DominoRankedInner = ({ authUser, onRequestLogin, onLogout }) => {
+  const { state, ...actions } = useGame();
+  const { t } = useTranslation();
+  
+  // === REFS ===
+  const socketRef = useRef(null);
+  const aiTimeoutRef = useRef(null);
+  
+  // === PROFILE HOOK ===
+  const {
+    profile,
+    playerProfile,
+    playerCurrencies,
+    playerInventory,
+    equippedCosmetics,
+    dailyRewards,
+    rankChange,
+    lastMatchRewards,
+    setLastMatchRewards,
+    updatePlayerStats,
+    updatePlayerRating,
+    handlePurchase,
+    equipCosmetic,
+    claimDailyReward,
+    calculateMatchRewards
+  } = usePlayerProfile(authUser);
+  
+  // === SETTINGS STATE ===
+  const [settings, setSettings] = useState(() => {
+    try {
+      const saved = localStorage.getItem('dominoSettings');
+      return saved ? JSON.parse(saved) : {
+        sound: true,
+        vibration: true,
+        animations: true,
+        turnTime: 30,
+        aiDifficulty: 'medium',
+        aiSpeed: 'normal',
+        suggestMoves: true,
+        showTileCount: true
+      };
+    } catch (e) {
+      return {};
+    }
+  });
+  
+  // Guardar settings
+  useEffect(() => {
+    localStorage.setItem('dominoSettings', JSON.stringify(settings));
+  }, [settings]);
+  
+  // === SOCKET STATE ===
+  const [socket, setSocket] = useState(null);
+  const [conectado, setConectado] = useState(false);
+  const [identificado, setIdentificado] = useState(false);
+  const [jugadoresOnline, setJugadoresOnline] = useState(0);
+  const [errorConexion, setErrorConexion] = useState(null);
+  
+  // === GAME STATE ===
+  const [gameMode, setGameMode] = useState('local');
+  const [phase, setPhase] = useState('menu');
+  const [players, setPlayers] = useState([
+    { id: 0, name: 'Tú', tiles: [], team: 0, avatar: '😎', elo: 1500 },
+    { id: 1, name: 'Bot 1', tiles: [], team: 1, avatar: '🤖', elo: 1500 },
+    { id: 2, name: 'Compañero', tiles: [], team: 0, avatar: '🎮', elo: 1500 },
+    { id: 3, name: 'Bot 2', tiles: [], team: 1, avatar: '🤖', elo: 1500 }
+  ]);
+  const [board, setBoard] = useState(() => SnakeBoard.create());
+  const [current, setCurrent] = useState(0);
+  const [scores, setScores] = useState([0, 0]);
+  const [passes, setPasses] = useState(0);
+  const [target] = useState(200);
+  const [timer, setTimer] = useState(30);
+  
+  // === ROUND STATE ===
+  const [firstRound, setFirstRound] = useState(true);
+  const [roundStarter, setRoundStarter] = useState(0);
+  const [mustPlay, setMustPlay] = useState(null);
+  const [lastPlayed, setLastPlayed] = useState(null);
+  const [playerPassed, setPlayerPassed] = useState(null);
+  const [roundResult, setRoundResult] = useState(null);
+  
+  // === UI STATE ===
+  const [activeScreen, setActiveScreen] = useState(null);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showDailyRewards, setShowDailyRewards] = useState(false);
+  const [showEmoteMenu, setShowEmoteMenu] = useState(false);
+  const [notification, setNotification] = useState(null);
+  const [lastOpponent, setLastOpponent] = useState(null);
+  
+  // === REMATCH HOOK ===
+  const rematch = useRematch({
+    socket,
+    gameMode,
+    lastOpponent,
+    onStartRematch: () => {
+      startNewGame(gameMode);
+    },
+    onNotification: showNotification
+  });
+  
+  // ============================================================================
+  // NOTIFICATION HELPER
+  // ============================================================================
+  function showNotification(type, message, icon, duration = 2500) {
+    setNotification({ type, message, icon });
+    setTimeout(() => setNotification(null), duration);
+  }
+  
+  // ============================================================================
+  // VIBRATION HELPER
+  // ============================================================================
+  const vibrate = useCallback((pattern = [50]) => {
+    if (settings.vibration && navigator.vibrate) {
+      navigator.vibrate(pattern);
+    }
+  }, [settings.vibration]);
+  
+  // ============================================================================
+  // SOCKET CONNECTION
+  // ============================================================================
+  useEffect(() => {
+    console.log('🔌 Conectando al servidor...');
+    
+    const newSocket = io(SERVIDOR_URL, {
+      transports: ['websocket', 'polling'],
+      timeout: 10000,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      autoConnect: true
+    });
+    
+    newSocket.on('connect', () => {
+      console.log('✅ Conectado:', newSocket.id);
+      setConectado(true);
+      setErrorConexion(null);
+      
+      const nombre = localStorage.getItem('dominoPlayerName') || profile.name || 'Jugador';
+      newSocket.emit('identificarse', { 
+        nombre,
+        elo: profile.elo || 1500
+      });
+    });
+    
+    newSocket.on('disconnect', (reason) => {
+      console.log('❌ Desconectado:', reason);
+      setConectado(false);
+      setIdentificado(false);
+    });
+    
+    newSocket.on('connect_error', (err) => {
+      console.log('⚠️ Error:', err.message);
+      setErrorConexion('No se puede conectar al servidor');
+      setConectado(false);
+    });
+    
+    newSocket.on('identificado', (datos) => {
+      console.log('👤 Identificado:', datos);
+      setIdentificado(true);
+      if (datos.odId) {
+        localStorage.setItem('dominoOdId', datos.odId);
+      }
+    });
+    
+    newSocket.on('jugadoresOnline', setJugadoresOnline);
+    
+    socketRef.current = newSocket;
+    setSocket(newSocket);
+    
+    return () => {
+      newSocket.disconnect();
+    };
+  }, [profile.name, profile.elo]);
+  
+  // ============================================================================
+  // TURN TIMER
+  // ============================================================================
+  useEffect(() => {
+    if (phase !== 'playing') return;
+    
+    const interval = setInterval(() => {
+      setTimer(prev => {
+        if (prev <= 1) {
+          if (current === 0) {
+            handlePass();
+          }
+          return settings.turnTime || 30;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [phase, current, settings.turnTime]);
+  
+  // ============================================================================
+  // DEAL TILES
+  // ============================================================================
+  const dealTiles = useCallback(() => {
+    const allTiles = [];
+    for (let i = 0; i <= 9; i++) {
+      for (let j = i; j <= 9; j++) {
+        allTiles.push({ left: i, right: j, id: `${i}-${j}` });
+      }
+    }
+    
+    for (let i = allTiles.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [allTiles[i], allTiles[j]] = [allTiles[j], allTiles[i]];
+    }
+    
+    const newPlayers = players.map((p, idx) => ({
+      ...p,
+      tiles: allTiles.slice(idx * 10, (idx + 1) * 10)
+    }));
+    
+    setPlayers(newPlayers);
+    return newPlayers;
+  }, [players]);
+  
+  // ============================================================================
+  // FIND STARTING PLAYER
+  // ============================================================================
+  const findStartingPlayer = useCallback((playersWithTiles, isFirst) => {
+    if (isFirst) {
+      let highestDouble = -1;
+      let startPlayer = 0;
+      
+      playersWithTiles.forEach((player, idx) => {
+        player.tiles.forEach(tile => {
+          if (tile.left === tile.right && tile.left > highestDouble) {
+            highestDouble = tile.left;
+            startPlayer = idx;
+          }
+        });
+      });
+      
+      if (highestDouble >= 0) {
+        setMustPlay({ left: highestDouble, right: highestDouble, id: `${highestDouble}-${highestDouble}` });
+      }
+      
+      return startPlayer;
+    }
+    return roundStarter;
+  }, [roundStarter]);
+  
+  // ============================================================================
+  // START NEW GAME
+  // ============================================================================
+  const startNewGame = useCallback((mode = 'local') => {
+    setGameMode(mode);
+    setBoard(SnakeBoard.create());
+    setScores([0, 0]);
+    setPasses(0);
+    setFirstRound(true);
+    setLastPlayed(null);
+    setMustPlay(null);
+    setRoundResult(null);
+    if (setLastMatchRewards) setLastMatchRewards(null);
+    rematch.resetRematchState();
+    
+    const newPlayers = dealTiles();
+    const starter = findStartingPlayer(newPlayers, true);
+    
+    setCurrent(starter);
+    setRoundStarter(starter);
+    setTimer(settings.turnTime || 30);
+    setPhase('playing');
+    
+    showNotification('info', '¡Comienza la partida!', '🎮');
+    
+    if (starter !== 0 && mode === 'local') {
+      scheduleAIMove(starter, newPlayers);
+    }
+  }, [dealTiles, findStartingPlayer, settings.turnTime, rematch, setLastMatchRewards]);
+  
+  // ============================================================================
+  // SCHEDULE AI MOVE
+  // ============================================================================
+  const scheduleAIMove = useCallback((playerIdx, currentPlayers) => {
+    if (aiTimeoutRef.current) {
+      clearTimeout(aiTimeoutRef.current);
+    }
+    
+    const delay = settings.aiSpeed === 'fast' ? 800 : 
+                  settings.aiSpeed === 'slow' ? 2500 : 1500;
+    
+    aiTimeoutRef.current = setTimeout(() => {
+      playAI(playerIdx, currentPlayers);
+    }, delay);
+  }, [settings.aiSpeed]);
+  
+  // ============================================================================
+  // AI PLAY
+  // ============================================================================
+  const playAI = useCallback((playerIdx, currentPlayers) => {
+    const player = currentPlayers[playerIdx];
+    const ends = Engine.getBoardEnds(board);
+    
+    const validMoves = [];
+    player.tiles.forEach(tile => {
+      if (!ends || (ends.left === null && ends.right === null)) {
+        if (mustPlay && tile.id === mustPlay.id) {
+          validMoves.unshift({ tile, position: 'center' });
+        } else if (!mustPlay) {
+          validMoves.push({ tile, position: 'center' });
+        }
+      } else {
+        if (tile.left === ends.left || tile.right === ends.left) {
+          validMoves.push({ tile, position: 'left' });
+        }
+        if (tile.left === ends.right || tile.right === ends.right) {
+          validMoves.push({ tile, position: 'right' });
+        }
+      }
+    });
+    
+    if (validMoves.length > 0) {
+      let move;
+      if (settings.aiDifficulty === 'easy') {
+        move = validMoves[Math.floor(Math.random() * validMoves.length)];
+      } else if (settings.aiDifficulty === 'expert') {
+        move = validMoves.sort((a, b) => {
+          const aVal = a.tile.left + a.tile.right + (a.tile.left === a.tile.right ? 10 : 0);
+          const bVal = b.tile.left + b.tile.right + (b.tile.left === b.tile.right ? 10 : 0);
+          return bVal - aVal;
+        })[0];
+      } else {
+        move = validMoves[Math.floor(Math.random() * Math.min(3, validMoves.length))];
+      }
+      
+      handlePlayTile(move.tile, move.position, playerIdx, currentPlayers);
+    } else {
+      handlePass(playerIdx, currentPlayers);
+    }
+  }, [board, mustPlay, settings.aiDifficulty]);
+  
+  // ============================================================================
+  // PLAY TILE
+  // ============================================================================
+  const handlePlayTile = useCallback((tile, position, playerIdx = current, currentPlayers = players) => {
+    const player = currentPlayers[playerIdx];
+    
+    const tileIndex = player.tiles.findIndex(t => t.id === tile.id);
+    if (tileIndex === -1) return;
+    
+    const newTiles = [...player.tiles];
+    newTiles.splice(tileIndex, 1);
+    
+    const newBoard = SnakeBoard.placeTile(board, tile, position);
+    if (!newBoard) {
+      console.error('Cannot place tile');
+      return;
+    }
+    
+    const updatedPlayers = currentPlayers.map((p, i) =>
+      i === playerIdx ? { ...p, tiles: newTiles } : p
+    );
+    
+    setPlayers(updatedPlayers);
+    setBoard(newBoard);
+    setLastPlayed({ tile, position, player: playerIdx });
+    setMustPlay(null);
+    setPasses(0);
+    
+    vibrate([30]);
+    
+    if (newTiles.length === 0) {
+      handleRoundEnd('domino', player.team, updatedPlayers);
+      return;
+    }
+    
+    nextTurn(updatedPlayers);
+  }, [current, players, board, vibrate]);
+  
+  // ============================================================================
+  // PASS
+  // ============================================================================
+  const handlePass = useCallback((playerIdx = current, currentPlayers = players) => {
+    const newPasses = passes + 1;
+    setPasses(newPasses);
+    setPlayerPassed(playerIdx);
+    
+    vibrate([20]);
+    
+    setTimeout(() => setPlayerPassed(null), 1500);
+    
+    if (newPasses >= 4) {
+      handleRoundEnd('tranca', null, currentPlayers);
+      return;
+    }
+    
+    nextTurn(currentPlayers);
+  }, [current, players, passes, vibrate]);
+  
+  // ============================================================================
+  // NEXT TURN
+  // ============================================================================
+  const nextTurn = useCallback((currentPlayers) => {
+    const next = (current + 1) % 4;
+    setCurrent(next);
+    setTimer(settings.turnTime || 30);
+    
+    if (next !== 0 && gameMode === 'local') {
+      scheduleAIMove(next, currentPlayers);
+    }
+  }, [current, gameMode, settings.turnTime, scheduleAIMove]);
+  
+  // ============================================================================
+  // ROUND END
+  // ============================================================================
+  const handleRoundEnd = useCallback((type, winTeam, currentPlayers) => {
+    if (aiTimeoutRef.current) {
+      clearTimeout(aiTimeoutRef.current);
+    }
+    
+    let points = 0;
+    
+    if (type === 'domino') {
+      currentPlayers.forEach(p => {
+        if (p.team !== winTeam) {
+          p.tiles.forEach(t => {
+            points += t.left + t.right;
+          });
+        }
+      });
+    } else if (type === 'tranca') {
+      const teamPoints = [0, 0];
+      currentPlayers.forEach(p => {
+        p.tiles.forEach(t => {
+          teamPoints[p.team] += t.left + t.right;
+        });
+      });
+      
+      if (teamPoints[0] < teamPoints[1]) {
+        winTeam = 0;
+        points = teamPoints[1];
+      } else if (teamPoints[1] < teamPoints[0]) {
+        winTeam = 1;
+        points = teamPoints[0];
+      } else {
+        winTeam = null;
+        points = 0;
+      }
+    }
+    
+    const newScores = [...scores];
+    if (winTeam !== null) {
+      newScores[winTeam] += points;
+      setScores(newScores);
+    }
+    
+    setRoundResult({
+      type,
+      winTeam,
+      points,
+      teamName: winTeam !== null ? (winTeam === 0 ? 'Tu equipo' : 'Oponentes') : 'Empate'
+    });
+    
+    showNotification(
+      winTeam === 0 ? 'success' : winTeam === 1 ? 'error' : 'info',
+      type === 'domino' ? '¡Dominó!' : '¡Tranca!',
+      type === 'domino' ? '🎯' : '🔒'
+    );
+    
+    if (newScores[0] >= target || newScores[1] >= target) {
+      setTimeout(() => {
+        handleGameEnd(newScores);
+      }, 2500);
+      return;
+    }
+    
+    setTimeout(() => {
+      startNextRound(winTeam);
+    }, 3000);
+  }, [scores, target]);
+  
+  // ============================================================================
+  // START NEXT ROUND
+  // ============================================================================
+  const startNextRound = useCallback((lastWinTeam) => {
+    setRoundResult(null);
+    setBoard(SnakeBoard.create());
+    setPasses(0);
+    setLastPlayed(null);
+    setMustPlay(null);
+    setFirstRound(false);
+    
+    const newPlayers = dealTiles();
+    const starter = lastWinTeam !== null ? (lastWinTeam === 0 ? 0 : 1) : roundStarter;
+    
+    setCurrent(starter);
+    setRoundStarter(starter);
+    setTimer(settings.turnTime || 30);
+    
+    if (starter !== 0 && gameMode === 'local') {
+      scheduleAIMove(starter, newPlayers);
+    }
+  }, [dealTiles, roundStarter, gameMode, settings.turnTime, scheduleAIMove]);
+  
+  // ============================================================================
+  // GAME END
+  // ============================================================================
+  const handleGameEnd = useCallback((finalScores) => {
+    const won = finalScores[0] >= target;
+    
+    if (calculateMatchRewards) {
+      calculateMatchRewards(won, { scores: finalScores, type: won ? 'victory' : 'defeat' });
+    }
+    
+    if (updatePlayerStats) {
+      updatePlayerStats({
+        gamesPlayed: (playerProfile.stats?.gamesPlayed || 0) + 1,
+        wins: won ? (playerProfile.stats?.wins || 0) + 1 : playerProfile.stats?.wins || 0,
+        losses: !won ? (playerProfile.stats?.losses || 0) + 1 : playerProfile.stats?.losses || 0
+      });
+    }
+    
+    setLastOpponent(players[1]);
+    setPhase('gameOver');
+    
+    showNotification(won ? 'success' : 'info', won ? '¡Victoria!' : 'Derrota', won ? '🏆' : '😢', 4000);
+  }, [target, calculateMatchRewards, updatePlayerStats, playerProfile, players]);
+  
+  // ============================================================================
+  // BACK TO MENU
+  // ============================================================================
+  const backToMenu = useCallback(() => {
+    if (aiTimeoutRef.current) {
+      clearTimeout(aiTimeoutRef.current);
+    }
+    setPhase('menu');
+    setRoundResult(null);
+    if (setLastMatchRewards) setLastMatchRewards(null);
+    rematch.resetRematchState();
+  }, [rematch, setLastMatchRewards]);
+  
+  // ============================================================================
+  // COMPUTED VALUES
+  // ============================================================================
+  const isMyTurn = current === 0;
+  const myTiles = players[0]?.tiles || [];
+  
+  const validMoves = useMemo(() => {
+    if (!isMyTurn || phase !== 'playing') return [];
+    
+    const ends = Engine.getBoardEnds(board);
+    const moves = [];
+    
+    myTiles.forEach(tile => {
+      if (!ends || (ends.left === null && ends.right === null)) {
+        if (mustPlay) {
+          if (tile.id === mustPlay.id) {
+            moves.push({ tile, positions: ['center'] });
+          }
+        } else {
+          moves.push({ tile, positions: ['center'] });
+        }
+      } else {
+        const positions = [];
+        if (tile.left === ends.left || tile.right === ends.left) positions.push('left');
+        if (tile.left === ends.right || tile.right === ends.right) positions.push('right');
+        if (positions.length > 0) moves.push({ tile, positions });
+      }
+    });
+    
+    return moves;
+  }, [isMyTurn, phase, board, myTiles, mustPlay]);
+  
+  const canPlay = validMoves.length > 0;
+  
+  // ============================================================================
+  // RENDER SCREENS
+  // ============================================================================
+  if (activeScreen) {
+    const screenProps = {
+      onClose: () => setActiveScreen(null),
+      playerProfile: profile,
+      playerCurrencies,
+      playerInventory,
+      equippedCosmetics,
+      onPurchase: handlePurchase,
+      onEquip: equipCosmetic,
+      t
+    };
+    
+    switch (activeScreen) {
+      case 'rankings': return <RankingsScreen {...screenProps} />;
+      case 'shop': return <ShopScreen {...screenProps} />;
+      case 'inventory': return <InventoryScreen {...screenProps} />;
+      case 'friends': return <FriendsScreen {...screenProps} />;
+      case 'achievements': return <AchievementsScreen {...screenProps} playerStats={playerProfile.stats} />;
+      case 'tournaments': return <TournamentsScreen {...screenProps} />;
+      case 'profile': return <ProfileScreen {...screenProps} onLogout={onLogout} />;
+      case 'settings': return <SettingsScreen {...screenProps} settings={settings} onSettingsChange={setSettings} />;
+      case 'tutorial': return <TutorialScreen {...screenProps} />;
+      case 'privateRoom': return <PrivateRoomScreen {...screenProps} />;
+      case 'coinStore': return <CoinStoreScreen {...screenProps} />;
+      case 'seasonPass': return <SeasonPassScreen {...screenProps} />;
+      default: break;
+    }
+  }
+  
+  // ============================================================================
+  // RENDER MENU
+  // ============================================================================
+  if (phase === 'menu') {
+    return (
+      <div style={{ minHeight: '100vh', background: C.bg.deep, color: C.text.primary, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: 16, borderBottom: `1px solid ${C.bg.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <button onClick={() => setActiveScreen('profile')} style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
+            <div style={{ width: 48, height: 48, borderRadius: '50%', background: `linear-gradient(135deg, ${C.gold.main}, ${C.gold.dark})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>
+              {profile.rankIcon || '🎲'}
+            </div>
+            <div style={{ textAlign: 'left' }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: '#fff' }}>{profile.name}</div>
+              <div style={{ fontSize: 13, color: C.text.secondary }}>{profile.rank || 'Sin rango'} • {profile.elo || 1500}</div>
+            </div>
+          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ padding: '8px 12px', borderRadius: 20, background: 'rgba(168, 85, 247, 0.15)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span>💎</span><span style={{ color: '#a855f7', fontWeight: 700 }}>{playerCurrencies.coins}</span>
+            </div>
+            <div style={{ padding: '8px 12px', borderRadius: 20, background: 'rgba(247, 179, 43, 0.15)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span>🪙</span><span style={{ color: '#f7b32b', fontWeight: 700 }}>{playerCurrencies.tokens}</span>
+            </div>
+          </div>
+        </div>
+        
+        <div style={{ flex: 1, padding: 16, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <button onClick={() => startNewGame('local')} style={{ padding: 20, borderRadius: 16, border: 'none', background: `linear-gradient(135deg, ${C.accent.green}, #16a34a)`, color: '#fff', fontSize: 18, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+              🎮 Jugar vs IA
+            </button>
+            <button onClick={() => startNewGame('online')} disabled={!conectado} style={{ padding: 20, borderRadius: 16, border: 'none', background: conectado ? 'linear-gradient(135deg, #3b82f6, #1d4ed8)' : '#333', color: '#fff', fontSize: 18, fontWeight: 700, cursor: conectado ? 'pointer' : 'not-allowed', opacity: conectado ? 1 : 0.5, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+              🌐 Jugar Online {conectado && <span style={{ fontSize: 12, background: 'rgba(255,255,255,0.2)', padding: '2px 8px', borderRadius: 10 }}>{jugadoresOnline} en línea</span>}
+            </button>
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+            {[{ icon: '🏆', label: 'Ranking', screen: 'rankings' }, { icon: '🛒', label: 'Tienda', screen: 'shop' }, { icon: '🎒', label: 'Inventario', screen: 'inventory' }, { icon: '👥', label: 'Amigos', screen: 'friends' }, { icon: '⚔️', label: 'Torneos', screen: 'tournaments' }, { icon: '🏠', label: 'Sala', screen: 'privateRoom' }, { icon: '💎', label: 'Monedas', screen: 'coinStore' }, { icon: '🌟', label: 'Pase', screen: 'seasonPass' }].map(item => (
+              <button key={item.screen} onClick={() => setActiveScreen(item.screen)} style={{ padding: '16px 8px', borderRadius: 12, border: `1px solid ${C.bg.border}`, background: C.bg.card, color: '#fff', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <span style={{ fontSize: 24 }}>{item.icon}</span><span style={{ fontSize: 11 }}>{item.label}</span>
+              </button>
+            ))}
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
+            <button onClick={() => setActiveScreen('achievements')} style={{ padding: 16, borderRadius: 12, border: `1px solid ${C.bg.border}`, background: C.bg.card, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 24 }}>🏅</span>
+              <div style={{ textAlign: 'left' }}><div style={{ fontWeight: 600 }}>Logros</div><div style={{ fontSize: 12, color: C.text.secondary }}>{playerProfile.stats?.achievementsUnlocked || 0} desbloqueados</div></div>
+            </button>
+            <button onClick={() => setActiveScreen('settings')} style={{ padding: 16, borderRadius: 12, border: `1px solid ${C.bg.border}`, background: C.bg.card, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 24 }}>⚙️</span>
+              <div style={{ textAlign: 'left' }}><div style={{ fontWeight: 600 }}>Ajustes</div><div style={{ fontSize: 12, color: C.text.secondary }}>Configuración</div></div>
+            </button>
+          </div>
+        </div>
+        
+        {errorConexion && <div style={{ padding: 12, background: 'rgba(239, 68, 68, 0.2)', borderTop: '1px solid rgba(239, 68, 68, 0.3)', textAlign: 'center', fontSize: 13, color: '#ef4444' }}>⚠️ {errorConexion}</div>}
+        {showDailyRewards && <DailyRewardsModal dailyRewards={dailyRewards} onClaim={claimDailyReward} onClose={() => setShowDailyRewards(false)} />}
+        {notification && <div style={{ position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)', background: notification.type === 'success' ? 'rgba(34, 197, 94, 0.9)' : notification.type === 'error' ? 'rgba(239, 68, 68, 0.9)' : 'rgba(59, 130, 246, 0.9)', color: '#fff', padding: '12px 24px', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 8, zIndex: 2000, boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>{notification.icon && <span>{notification.icon}</span>}{notification.message}</div>}
+      </div>
+    );
+  }
+  
+  // ============================================================================
+  // RENDER GAME OVER
+  // ============================================================================
+  if (phase === 'gameOver') {
+    const won = scores[0] >= target;
+    return (
+      <div style={{ minHeight: '100vh', background: C.bg.deep, color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center' }}>
+        <div style={{ fontSize: 64, marginBottom: 16 }}>{won ? '🏆' : '😢'}</div>
+        <h1 style={{ fontSize: 32, marginBottom: 8 }}>{won ? '¡Victoria!' : 'Derrota'}</h1>
+        <p style={{ fontSize: 18, color: C.text.secondary, marginBottom: 24 }}>{scores[0]} - {scores[1]}</p>
+        
+        {lastMatchRewards && <div style={{ background: C.bg.card, borderRadius: 12, padding: 16, marginBottom: 24, minWidth: 200 }}><div style={{ fontWeight: 600, marginBottom: 8 }}>Recompensas</div><div style={{ display: 'flex', justifyContent: 'center', gap: 16 }}><div>🪙 +{lastMatchRewards.tokens}</div><div>⭐ +{lastMatchRewards.xp} XP</div></div></div>}
+        
+        {rematch.hasRematchRequest && <div style={{ background: 'rgba(59, 130, 246, 0.2)', border: '1px solid rgba(59, 130, 246, 0.5)', borderRadius: 12, padding: 16, marginBottom: 16, maxWidth: 300 }}><p style={{ marginBottom: 12 }}>{rematch.rematchOpponent.name} quiere revancha</p><div style={{ display: 'flex', gap: 8 }}><button onClick={rematch.acceptRematch} style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: C.accent.green, color: '#fff', fontWeight: 600, cursor: 'pointer' }}>Aceptar</button><button onClick={rematch.declineRematch} style={{ flex: 1, padding: '10px', borderRadius: 8, border: `1px solid ${C.bg.border}`, background: 'transparent', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>Rechazar</button></div></div>}
+        
+        <div style={{ display: 'flex', gap: 12 }}>
+          {rematch.canRequestRematch && !rematch.hasRematchRequest && <button onClick={rematch.requestRematch} disabled={rematch.isWaitingResponse} style={{ padding: '14px 28px', borderRadius: 12, border: 'none', background: rematch.isWaitingResponse ? '#666' : C.accent.green, color: '#fff', fontSize: 16, fontWeight: 600, cursor: rematch.isWaitingResponse ? 'not-allowed' : 'pointer' }}>{rematch.isWaitingResponse ? '⏳ Esperando...' : '🔄 Revancha'}</button>}
+          <button onClick={backToMenu} style={{ padding: '14px 28px', borderRadius: 12, border: `1px solid ${C.bg.border}`, background: 'transparent', color: '#fff', fontSize: 16, fontWeight: 600, cursor: 'pointer' }}>🏠 Menú</button>
+        </div>
+        <p style={{ marginTop: 16, fontSize: 12, color: C.text.muted }}>Revanchas: {rematch.rematchCount}/{rematch.maxRematches}</p>
+      </div>
+    );
+  }
+  
+  // ============================================================================
+  // RENDER PLAYING
+  // ============================================================================
+  return (
+    <div style={{ minHeight: '100vh', background: C.bg.deep, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+      <GameHUD scores={scores} target={target} current={current} players={players} timer={timer} isMyTurn={isMyTurn} onSettings={() => setShowSettings(true)} onEmotes={() => setShowEmoteMenu(!showEmoteMenu)} />
+      
+      <OpponentHandTop count={players[2]?.tiles?.length || 0} tileSize={20} player={players[2]} isCurrentTurn={current === 2} />
+      <OpponentHandSide count={players[1]?.tiles?.length || 0} tileSize={20} player={players[1]} side="left" isCurrentTurn={current === 1} />
+      <OpponentHandSide count={players[3]?.tiles?.length || 0} tileSize={20} player={players[3]} side="right" isCurrentTurn={current === 3} />
+      
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Board board={board} lastPlayed={lastPlayed} skinSet={equippedCosmetics.skinSet} />
+      </div>
+      
+      {playerPassed !== null && <PassIndicator position={playerPassed} />}
+      
+      <PlayerHandArea tiles={myTiles} board={board} onPlay={(tile, pos) => handlePlayTile(tile, pos)} onReorderTiles={(tiles) => setPlayers(prev => prev.map((p, i) => i === 0 ? { ...p, tiles } : p))} onFlipTile={(tileId) => setPlayers(prev => prev.map((p, i) => i !== 0 ? p : { ...p, tiles: p.tiles.map(t => t.id === tileId ? { ...t, left: t.right, right: t.left } : t) }))} mustPlay={mustPlay} isMyTurn={isMyTurn} player={players[0]} validMoves={validMoves} suggestMoves={settings.suggestMoves} />
+      
+      {isMyTurn && !canPlay && <div style={{ position: 'fixed', bottom: 140, left: '50%', transform: 'translateX(-50)', zIndex: 100 }}><button onClick={() => handlePass()} style={{ padding: '16px 40px', borderRadius: 12, border: 'none', background: '#ef4444', color: '#fff', fontSize: 18, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.4)' }}>Pasar</button></div>}
+      
+      {roundResult && <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}><div style={{ background: C.bg.surface, borderRadius: 16, padding: 24, textAlign: 'center', minWidth: 280 }}><div style={{ fontSize: 48, marginBottom: 12 }}>{roundResult.type === 'domino' ? '🎯' : '🔒'}</div><h2 style={{ color: '#fff', marginBottom: 8 }}>{roundResult.type === 'domino' ? '¡Dominó!' : '¡Tranca!'}</h2><p style={{ color: C.text.secondary, marginBottom: 16 }}>{roundResult.winTeam !== null ? `${roundResult.teamName} +${roundResult.points} puntos` : 'Empate'}</p><div style={{ fontSize: 24, fontWeight: 700, color: C.gold.main }}>{scores[0]} - {scores[1]}</div></div></div>}
+      
+      {showSettings && <SettingsModal settings={settings} onSettingsChange={setSettings} onClose={() => setShowSettings(false)} onSurrender={() => handleGameEnd([0, target])} onLeaveGame={backToMenu} isPlaying={true} />}
+      
+      {showEmoteMenu && <div style={{ position: 'fixed', bottom: 200, left: '50%', transform: 'translateX(-50%)', background: C.bg.surface, borderRadius: 12, padding: 12, display: 'flex', gap: 8, flexWrap: 'wrap', maxWidth: 280, justifyContent: 'center', zIndex: 100, boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>{EMOTES.map(emote => <button key={emote} onClick={() => { showNotification('info', emote, ''); setShowEmoteMenu(false); }} style={{ width: 44, height: 44, borderRadius: 8, border: 'none', background: C.bg.card, fontSize: 24, cursor: 'pointer' }}>{emote}</button>)}</div>}
+      
+      {notification && <div style={{ position: 'fixed', top: 80, left: '50%', transform: 'translateX(-50%)', background: notification.type === 'success' ? 'rgba(34, 197, 94, 0.9)' : notification.type === 'error' ? 'rgba(239, 68, 68, 0.9)' : 'rgba(59, 130, 246, 0.9)', color: '#fff', padding: '12px 24px', borderRadius: 12, display: 'flex', alignItems: 'center', gap: 8, zIndex: 2000, boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>{notification.icon && <span>{notification.icon}</span>}{notification.message}</div>}
+    </div>
+  );
+};
+
+// ============================================================================
+// MAIN COMPONENT
+// ============================================================================
+const DominoRanked = (props) => {
+  return (
+    <GameProvider>
+      <DominoRankedInner {...props} />
+    </GameProvider>
+  );
+};
+
+export default DominoRanked;

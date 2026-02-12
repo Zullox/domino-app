@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="200" viewBox="0 0 100 200">
+  <defs>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffd700"/>
+      <stop offset="25%" style="stop-color:#daa520"/>
+      <stop offset="50%" style="stop-color:#b8860b"/>
+      <stop offset="75%" style="stop-color:#daa520"/>
+      <stop offset="100%" style="stop-color:#ffd700"/>
+    </linearGradient>
+    <!-- Gold shine -->
+    <linearGradient id="goldShine" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:rgba(255,255,255,0)"/>
+      <stop offset="40%" style="stop-color:rgba(255,255,255,0)"/>
+      <stop offset="50%" style="stop-color:rgba(255,255,255,0.6)"/>
+      <stop offset="60%" style="stop-color:rgba(255,255,255,0)"/>
+      <stop offset="100%" style="stop-color:rgba(255,255,255,0)"/>
+    </linearGradient>
+    <filter id="goldGlow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  <rect width="100" height="200" rx="12" fill="url(#goldGrad)"/>
+  <rect width="100" height="200" rx="12" fill="url(#goldShine)"/>
+  <line x1="5" y1="100" x2="95" y2="100" stroke="#8b6914" stroke-width="2"/>
+  <rect x="2" y="2" width="96" height="196" rx="10" fill="none" stroke="#ffd700" stroke-width="3" filter="url(#goldGlow)"/>
+</svg>

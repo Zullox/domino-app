@@ -1,0 +1,128 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ========================================================================
+    // FUNCIONES HELPER
+    // ========================================================================
+    
+    // Usuario autenticado
+    function isAuth() {
+      return request.auth != null;
+    }
+    
+    // Es el dueño del documento
+    function isOwner(userId) {
+      return isAuth() && request.auth.uid == userId;
+    }
+    
+    // Campos que el cliente NUNCA puede modificar directamente
+    // (solo el servidor vía Admin SDK puede cambiar rating, ELO, etc.)
+    function noSensitiveFields() {
+      let forbidden = ['rating', 'rd', 'volatility', 'peakRating', 'peakRank', 
+                        'level', 'experience', 'seasonPass'];
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(forbidden);
+    }
+    
+    // Solo modifica campos de amigos
+    function onlyFriendFields() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['friends', 'friendRequests']);
+    }
+    
+    // Validar que stats solo incrementen (no se puedan setear a valores arbitrarios)
+    function statsOnlyIncrement() {
+      let newStats = request.resource.data.stats;
+      let oldStats = resource.data.stats;
+      return newStats.gamesPlayed >= oldStats.gamesPlayed
+          && newStats.wins >= oldStats.wins
+          && newStats.losses >= oldStats.losses;
+    }
+    
+    // ========================================================================
+    // USUARIOS
+    // ========================================================================
+    match /users/{userId} {
+      // Cualquier autenticado puede leer perfiles públicos
+      allow read: if isAuth();
+      
+      // Solo el dueño puede crear su propio perfil
+      allow create: if isOwner(userId);
+      
+      // El dueño puede actualizar SOLO campos seguros
+      allow update: if isOwner(userId) && noSensitiveFields();
+      
+      // Otro usuario puede modificar SOLO friends/friendRequests
+      // (para enviar solicitudes y aceptar amistades)
+      allow update: if isAuth() && !isOwner(userId) && onlyFriendFields();
+      
+      // Nadie puede borrar usuarios desde el cliente
+      allow delete: if false;
+    }
+    
+    // ========================================================================
+    // PARTIDAS (HISTORIAL)
+    // ========================================================================
+    match /matches/{matchId} {
+      // Los jugadores de la partida pueden leerla
+      allow read: if isAuth() && request.auth.uid in resource.data.playerIds;
+      
+      // Solo el servidor puede crear partidas (via Admin SDK)
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // ========================================================================
+    // TORNEOS
+    // ========================================================================
+    match /tournaments/{tournamentId} {
+      // Cualquier autenticado puede ver torneos
+      allow read: if isAuth();
+      
+      // Solo el servidor maneja torneos
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // ========================================================================
+    // REPORTES
+    // ========================================================================
+    match /reports/{reportId} {
+      // Solo se puede crear (no leer ni editar)
+      allow create: if isAuth() 
+                    && request.resource.data.reporterId == request.auth.uid
+                    && request.resource.data.keys().hasAll(['reporterId', 'reportedId', 'reason', 'createdAt']);
+      
+      allow read: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // ========================================================================
+    // TRANSACCIONES (LOG de compras - solo servidor)
+    // ========================================================================
+    match /transactions/{txId} {
+      allow read: if isAuth() && resource.data.userId == request.auth.uid;
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+    
+    // ========================================================================
+    // TEMPORADAS
+    // ========================================================================
+    match /seasons/{seasonId} {
+      allow read: if isAuth();
+      allow write: if false;
+    }
+    
+    // ========================================================================
+    // BLOQUEAR TODO LO DEMÁS
+    // ========================================================================
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

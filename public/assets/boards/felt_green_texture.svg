@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400">
+  <defs>
+    <!-- Patrón de ruido para textura de fieltro -->
+    <filter id="feltNoise" x="0%" y="0%" width="100%" height="100%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="4" result="noise"/>
+      <feDiffuseLighting in="noise" lighting-color="#1a5c35" surfaceScale="2" result="light">
+        <feDistantLight azimuth="45" elevation="60"/>
+      </feDiffuseLighting>
+      <feBlend in="SourceGraphic" in2="light" mode="multiply"/>
+    </filter>
+    
+    <!-- Gradiente base del fieltro -->
+    <radialGradient id="feltGrad" cx="50%" cy="50%" r="70%">
+      <stop offset="0%" style="stop-color:#1e6b3a"/>
+      <stop offset="100%" style="stop-color:#145028"/>
+    </radialGradient>
+    
+    <!-- Patrón de fibras -->
+    <pattern id="fibers" patternUnits="userSpaceOnUse" width="4" height="4">
+      <rect width="4" height="4" fill="#1a5c35"/>
+      <line x1="0" y1="0" x2="4" y2="4" stroke="#1e6b3a" stroke-width="0.5" opacity="0.3"/>
+      <line x1="4" y1="0" x2="0" y2="4" stroke="#145028" stroke-width="0.5" opacity="0.3"/>
+    </pattern>
+  </defs>
+  
+  <!-- Capa base -->
+  <rect width="400" height="400" fill="url(#feltGrad)"/>
+  
+  <!-- Capa de fibras -->
+  <rect width="400" height="400" fill="url(#fibers)" opacity="0.6"/>
+  
+  <!-- Capa de textura con ruido -->
+  <rect width="400" height="400" filter="url(#feltNoise)" opacity="0.4"/>
+  
+  <!-- Viñeta sutil -->
+  <rect width="400" height="400" fill="url(#feltGrad)" opacity="0.3"/>
+</svg>
