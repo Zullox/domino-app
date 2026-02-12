@@ -5,7 +5,7 @@
 // ============================================================================
 
 import React, { useState, useCallback, memo } from 'react';
-import { REPORT_REASONS, submitReport } from '../services/reports';
+import { REPORT_REASONS, submitReport } from '../../services/reports';
 
 const C = {
   bg: { deep: '#0a0a0f', surface: '#12121a', elevated: '#1a1a24' },
