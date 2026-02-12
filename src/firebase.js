@@ -5,7 +5,7 @@
 // 2. Habilitar Authentication > Sign-in methods: Google, Apple, Email
 // 3. Copiar las credenciales aquí
 
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps } from 'firebase/app';
 import { 
   getAuth, 
   signInWithPopup,
@@ -32,17 +32,11 @@ const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '329019462538',
   appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:329019462538:web:bf249ae218bee3b1dbee73'
 };
-// Inicializar Firebase
-let app;
-let auth;
 
-try {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  console.log('[Firebase] Inicializado correctamente');
-} catch (error) {
-  console.error('[Firebase] Error de inicialización:', error);
-}
+// Inicializar Firebase (evitar doble inicialización)
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+const auth = getAuth(app);
+console.log('[Firebase] Inicializado correctamente');
 
 // Proveedores de autenticación
 const googleProvider = new GoogleAuthProvider();
