@@ -38,7 +38,16 @@ Sigue los pasos en orden: tardarás unos 30–45 minutos (casi todo es esperar d
   ```
 - [ ] Abre la URL que aparece (también desde el móvil en la misma wifi). Mueve el cuadrado con flechas o tocando, recoge monedas y esquiva triángulos.
 
-## 5. ¡Crear tu primer juego!
+## 5. Jugar a Ludus: Blood and Glory (ya está hecho el prototipo)
+- [ ] ```
+  cd games/ludus
+  npm install
+  npm run dev
+  ```
+- [ ] Juega una partida en *Veteranus* y apunta qué te gusta y qué no: eso guía la siguiente versión.
+- [ ] Diseño completo en `docs/gdd/ludus.md`.
+
+## 6. ¡Crear otro juego!
 - [ ] Vuelve a `domino-app`, abre `claude` y escribe:
   ```
   /nuevo-juego mi-juego

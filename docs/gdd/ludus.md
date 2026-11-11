@@ -1,6 +1,6 @@
-# LUDUS — Documento de diseño (v0.1)
+# Ludus: Blood and Glory — Documento de diseño (v0.2)
 
-> Título provisional. Alternativas: *Ludus: Sangre y Gloria*, *Lanista*, *Arena de Hierro*.
+> Tono: **histórico y de simulación**. Sin fantasía: clases, términos y costumbres de la Roma del s. I d. C. (Capua, *munera*, *editor*, *missio*, *rudis*).
 
 ## 1. Pitch
 Eres un **lanista** que compra esclavos y voluntarios, los entrena en tu ludus y los lleva a la arena: partidas de **30–60 segundos**, decisiones simples y un ludus que crece ante tus ojos.
@@ -28,7 +28,7 @@ Eres un **lanista** que compra esclavos y voluntarios, los entrena en tu ludus y
 | Reciario | Red y tridente | Control, inmoviliza | Murmillo |
 | Dimachaerus | Dos espadas | Agresivo, frágil | — (comodín) |
 
-Triángulo piedra-papel-tijera: +15 % de ventaja contra su clase débil.
+Triángulo piedra-papel-tijera: +25 % de daño contra su clase débil y −10 % contra la fuerte.
 
 **Rasgos** (1–2 aleatorios al reclutar, otros se ganan en combate). Ejemplos:
 - *Favorito de la plebe* — +25 % de favor del público.
@@ -54,7 +54,7 @@ Duración objetivo: 30–45 s, con botón ×2 de velocidad. Resolución por turn
 - Vida = 20 + Resistencia × 4
 - Daño = 2 + Fuerza × 0,6 × (postura) × (ventaja de clase) ± 20 %
 - Esquiva = 5 % + Agilidad × 1,5 % (máx. 40 %)
-- Valor baja 1 por cada 15 % de vida perdida; a 0 → se rinde.
+- Valor baja 1 por cada 20 % de vida perdida; a 0 → se rinde.
 
 ## 5. El ludus (la "base")
 | Edificio | Efecto | Niveles |
@@ -124,6 +124,22 @@ Cada mejora cambia el dibujo del ludus en la pantalla principal.
 - % de combates en los que se usa la carta de táctica.
 - Retención D1 / D7.
 
-## 14. Preguntas abiertas
-- ¿Muerte permanente activada por defecto o modo "clemente"?
-- ¿Monetización? (Propuesta: ninguna en el MVP; después, solo cosméticos, nunca pagar para ganar.)
+## 14. Dificultad (se elige al empezar)
+| | **Tiro** (fácil) | **Veteranus** (normal) | **Lanista Legendario** (difícil) |
+|---|---|---|---|
+| Denarios iniciales | 400 | 250 | 150 |
+| Muerte en la arena | No: el caído queda herido | Sí, si el público no concede *missio* | Sí, y el público es más cruel |
+| Probabilidad base de *missio* | 80 % | 55 % | 35 % |
+| Fuerza de los rivales | ×0,85 | ×1,0 | ×1,15 |
+| Coste de comida | ×1 | ×1 | ×1,5 |
+| Bancarrota | Aviso | Aviso | Fin de la partida tras 3 días en deudas |
+
+## 15. Simulación histórica
+- Términos latinos con explicación al tocar: *lanista*, *munus*, *editor*, *missio*, *rudis* (espada de madera que daba la libertad).
+- Heridas con días de recuperación y secuelas permanentes (cicatrices).
+- Liberar a un gladiador con la *rudis* lo envía al Salón de la Fama.
+- Los gladiadores envejecen (1 año cada 30 días).
+- La comida y el médico cuestan dinero cada día: gestionar es tan importante como combatir.
+
+## 16. Monetización
+Ninguna en el MVP. Más adelante, solo cosméticos; nunca pagar para ganar.
